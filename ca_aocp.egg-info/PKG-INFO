@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: ca_aocp
+Version: 0.1.0
+Summary: Changepoint-Aware Adaptive Online Conformal Prediction
+Requires-Python: >=3.9
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Requires-Dist: pandas>=1.5
+Requires-Dist: matplotlib>=3.6
+Provides-Extra: notebook
+Requires-Dist: jupyter; extra == "notebook"
+Requires-Dist: ipywidgets; extra == "notebook"
+Requires-Dist: seaborn; extra == "notebook"
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
