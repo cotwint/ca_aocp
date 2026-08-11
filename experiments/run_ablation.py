@@ -26,6 +26,7 @@ Usage:
 
 from __future__ import annotations
 import sys
+from collections import deque
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -92,7 +93,25 @@ class GenericMethod:
 
         self._alpha_t = alpha
         self._q_t = init_radius
-        self._scores: list[float] = []
+        # (2026-08 follow-up) Only BOCPD-driven variants (use_bocpd or
+        # hard_reset) get a K-bounded score buffer here. That matches the
+        # paper's own hyperparameter table (Table 9): truncation depth K is
+        # listed under "CA-AOCP only" -- ACI and EWMA-ACI (the plain-ACI and
+        # EWMA-CP baselines) are NOT given a K in the paper and are meant to
+        # stay full-history (ACI, Table 6: O(t)) or decay-only (EWMA-CP,
+        # Table 6: O(1) amortised), so their buffers are left unbounded,
+        # unchanged from before. Before this fix, ALL eight ablation cells
+        # used an unbounded list here regardless of use_bocpd/hard_reset, so
+        # every BOCPD-driven variant's calibration set silently included the
+        # entire history rather than the K most recent scores -- meaning the
+        # cov_gap/width/Winkler numbers reported for those six methods in
+        # the Task #1-#6 experiment summary were never actually measuring
+        # K-truncated CA-AOCP-style calibration.
+        self._max_run_length = max_run_length
+        self._truncated = use_bocpd or hard_reset
+        self._scores: deque[float] | list[float] = (
+            deque(maxlen=max_run_length) if self._truncated else []
+        )
         self._pi: np.ndarray | None = None  # pi_{t,i} snapshot to use for THIS step's q_t (already baked into _q_t)
         self._predictor = predictor or RollingMeanPredictor(window=20)
 
@@ -163,13 +182,23 @@ class GenericMethod:
 
             # -- update BOCPD (if needed) to get info for q_{t+1} --
             if self._bocpd is not None:
-                pi_new = self._bocpd.update(s_t)
-                run_post = self._bocpd.get_run_length_posterior()
+                # compute_legacy_pi=False: we only ever need the bounded
+                # pi_recent()/get_run_length_posterior() views below, both
+                # already O(K); building the legacy O(t) pi vector here (as
+                # this used to do unconditionally) would silently reintroduce
+                # a per-step cost that grows with t, same leak as fixed in
+                # ca_aocp.algorithm.CAAOCP (see bocpd.py's module docstring).
+                self._bocpd.update(s_t, compute_legacy_pi=False)
+                run_post = self._bocpd.get_run_length_posterior()  # O(K), dense but bounded
                 r_hat_seq[t_idx] = int(np.argmax(run_post))
                 if self.hard_reset:
                     weight_info = run_post
                 else:
-                    weight_info = pi_new
+                    # Bounded O(K) pi window, matching the K-sized score
+                    # buffer above -- was the legacy full-length pi_new from
+                    # update()'s old return value, matched against an
+                    # unbounded score list.
+                    weight_info = self._bocpd.pi_recent(self._max_run_length)
             else:
                 weight_info = None
 

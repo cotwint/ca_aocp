@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -105,7 +106,18 @@ class TrackedMethod:
         self.alpha_min, self.alpha_max = alpha_min, alpha_max
         self._alpha_t = alpha
         self._q_t = init_radius
-        self._scores: list[float] = []
+        self.K = K
+        # (2026-08 follow-up) All four methods here are BOCPD-driven
+        # (soft-weighted or hard-reset), so all four are meant to be
+        # K-truncated per the paper's CA-AOCP hyperparameter table. Before
+        # this fix, self._scores was an unbounded list matched against the
+        # legacy full-length pi from GaussianBOCPD.update()'s old return
+        # value -- so this script's soft-vs-hard-reset comparison (the whole
+        # point of run_shift_grid.py) was never actually run under K
+        # truncation, only under BOCPD's internal K-truncated run-length
+        # posterior extended (via legacy _compute_pi()) over the full,
+        # untruncated score history.
+        self._scores: deque[float] = deque(maxlen=K)
         self._predictor = RollingMeanPredictor(window=pred_window)
         self._bocpd = GaussianBOCPD(hazard=hazard, max_run_length=K, **bocpd_kwargs)
 
@@ -148,10 +160,13 @@ class TrackedMethod:
             else:
                 alpha_next = self.alpha
 
-            pi_new = self._bocpd.update(s_t)
+            # compute_legacy_pi=False: avoid the O(t) legacy-pi leak (same
+            # fix as ca_aocp.algorithm.CAAOCP); we only use the bounded
+            # pi_recent()/get_run_length_posterior() views below.
+            self._bocpd.update(s_t, compute_legacy_pi=False)
             run_post = self._bocpd.get_run_length_posterior()
             r_hat_seq[t_idx] = int(np.argmax(run_post))
-            weight_info = run_post if self.hard_reset else pi_new
+            weight_info = run_post if self.hard_reset else self._bocpd.pi_recent(self.K)
 
             n = len(self._scores)
             if n >= 2:

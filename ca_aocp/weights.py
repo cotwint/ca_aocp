@@ -21,13 +21,19 @@ def compute_weights(
 
     Parameters
     ----------
-    pi : np.ndarray, shape (t-1,)
-        Regime relevance scores π_{t,i} for i = 1, …, t−1.
-        pi[i-1] = π_{t,i} = P(observation i is from current regime).
+    pi : np.ndarray, shape (n,)
+        Regime relevance scores π_{t,i} for the n historical observations
+        the caller is tracking (n = t−1 for the legacy/unbounded caller,
+        or n = min(t−1, K) for callers using the bounded
+        `GaussianBOCPD.pi_recent()` window -- this function is agnostic
+        to which, it only needs `pi` and `scores` to have matching length).
+        pi[i-1] = π_{t,i} = P(observation i is from current regime),
+        oldest tracked observation first.
     decay : float
         Forgetting parameter λ ≥ 0.  λ=0 uses pure BOCPD weights.
     t : int
-        Current time step (1-indexed).
+        Current time step (1-indexed). Unused by the computation itself
+        (lags are derived from `len(pi)`); kept for API/logging clarity.
 
     Returns
     -------
