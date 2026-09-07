@@ -14,6 +14,7 @@ Usage
 """
 
 from __future__ import annotations
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Optional
 import numpy as np
@@ -163,7 +164,14 @@ class CAAOCP:
         # Internal state
         self._alpha_t: float = alpha
         self._t: int = 0
-        self._scores: list[float] = []
+        self.max_run_length = max_run_length
+        # Bounded ring buffer of the K most recent conformity scores. This
+        # (together with `GaussianBOCPD.pi_recent()`) is what gives CA-AOCP
+        # genuine O(K) per-step cost, matching Algorithm 2's complexity
+        # claim -- previously this was an unbounded list growing as O(t),
+        # so weighted_quantile() was sorting the *entire* score history
+        # every step regardless of max_run_length.
+        self._scores: deque[float] = deque(maxlen=max_run_length)
         self._pi: Optional[np.ndarray] = None
 
         # Components
@@ -242,7 +250,15 @@ class CAAOCP:
         neff = effective_sample_size(w_used)
 
         # ── BOCPD update (using S_t just observed) ──
-        pi_new = self._bocpd.update(s_t)  # π_{t+1, i} for next step
+        # Advance internal BOCPD state (O(K) per step); the legacy return
+        # value of update() is O(t) and not needed here, so we fetch the
+        # bounded pi ourselves via pi_recent(), matched to the same K-sized
+        # window as the `self._scores` ring buffer. compute_legacy_pi=False
+        # stops `update()` from building that unused O(t) vector in the
+        # first place (see bocpd.py module docstring, "Legacy-pi leak fix"
+        # -- previously this call paid an O(t) cost every step regardless).
+        self._bocpd.update(s_t, compute_legacy_pi=False)
+        pi_new = self._bocpd.pi_recent(self.max_run_length)  # π_{t+1, i}, bounded to O(K)
         self._pi = pi_new
 
         # ── Compute q_{t+1} for the next step ──

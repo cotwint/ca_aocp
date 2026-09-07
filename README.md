@@ -89,13 +89,17 @@ aci_sw  = ACISlidingWindow(alpha=0.1, eta=0.02, window=100).run(ys)
 ewma_cp = EWMACP(alpha=0.1, eta=0.02, decay=0.01).run(ys)
 ```
 
-## Key Theoretical Guarantees
+The checked-in multi-seed comparison against the published online-conformal
+baselines is available in `experiments/run_baselines_multiseed.py`. Its raw
+results and paired significance tables are kept under
+`experiments/output_baselines_multiseed*/` and
+`experiments/output_significance_baselines*/`.
 
-| Result | Rate | Reference |
+## Formal Theoretical Result
+
+| Result | Reference |
 |---|---|---|
-| Post-changepoint mismatch decay | exp(−c_mis · n) | Theorem 1 (paper) |
-| ACI-SW lower bound | Θ(W) steps to recover | Theorem 3(ii) |
-| PAC joint coverage | 1 − β w.h.p. | Theorem 2 |
+| Formal CA-AOCP result under the paper's stated assumptions | Proposition 1 (paper) |
 
 ## Hyperparameter Guide
 
@@ -106,4 +110,4 @@ ewma_cp = EWMACP(alpha=0.1, eta=0.02, decay=0.01).run(ys)
 | `decay` (λ) | 0.005–0.05 | Within-regime recency |
 | `temperature` (τ) | ≍ η / M | Smooth surrogate sharpness |
 | `hazard` (h) | ≍ 1/L (regime length) | BOCPD changepoint prior |
-| `max_run_length` (K) | 300–500 | BOCPD truncation depth |
+| `max_run_length` (K) | 50 (paper-reported results) | BOCPD truncation depth; larger K may be useful in specific settings. See `experiments/run_hparam_sensitivity.py` and `experiments/output_hparam/sensitivity_K.csv`. |
