@@ -1,3 +1,8 @@
+> **重要说明（配置口径）**：`run_baselines.py` 和 `run_real_data.py` 中的
+> `K=400` 是早期探索配置，其输出不对应论文报告的结果。正式的多 seed
+> baseline 结果请使用 `run_baselines_multiseed.py`，并核对仓库中已保存的
+> `output_baselines_multiseed*/` 与 `output_significance_baselines*/` CSV。
+
 # run_baselines.py & run_real_data.py —— 逐行解读
 
 两个脚本都做同一件事：**用不同的 conformal threshold 方法，对同一个数据流跑在线预测，比较覆盖率和区间宽度**。唯一的区别是数据来源和校准方式。
